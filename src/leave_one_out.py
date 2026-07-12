@@ -84,20 +84,27 @@ def main():
                        "dict_families": DICT_FAMILIES}, f, ensure_ascii=False, indent=2)
 
     # Bar chart
+    from matplotlib.patches import Patch
+    from matplotlib.lines import Line2D
     fams = list(results.keys())
     vals = [results[f] for f in fams]
     colors = ["#d62728" if f in DICT_FAMILIES else "#1f77b4" for f in fams]
     plt.figure(figsize=(10, 5))
     bars = plt.bar(fams, vals, color=colors)
     if ref is not None:
-        plt.axhline(ref, color="green", linestyle="--",
-                    label=f"normal test-set recall = {ref:.2f}")
+        plt.axhline(ref, color="green", linestyle="--")
     for b, v in zip(bars, vals):
         plt.text(b.get_x() + b.get_width() / 2, v + 0.01, f"{v:.2f}",
                  ha="center", fontsize=8)
-    plt.ylabel("Recall on UNSEEN family"); plt.ylim(0, 1.05)
-    plt.title("Leave-one-family-out: recall on unseen families\n(red = dictionary/word-based, blue = arithmetic)")
-    plt.legend(); plt.xticks(rotation=30, ha="right"); plt.tight_layout()
+    handles = [Patch(color="#d62728", label="dictionary / word-based"),
+               Patch(color="#1f77b4", label="arithmetic / random")]
+    if ref is not None:
+        handles.append(Line2D([0], [0], color="green", ls="--",
+                              label=f"normal test-set recall = {ref:.2f}"))
+    plt.ylabel("Recall on unseen family"); plt.ylim(0, 1.05)
+    plt.title("Leave-one-family-out: recall on families never seen during training")
+    plt.legend(handles=handles, loc="lower right", fontsize=9)
+    plt.xticks(rotation=30, ha="right"); plt.tight_layout()
     plt.savefig(os.path.join(args.outdir, "loo_recall.png"), dpi=120); plt.close()
 
     dict_avg = np.mean([results[f] for f in DICT_FAMILIES if f in results])
