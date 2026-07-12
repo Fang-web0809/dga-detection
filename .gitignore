@@ -3,7 +3,6 @@ data/
 
 # 大檔 / 衍生資料(可由 pipeline 重建)
 results/processed.csv
-results/lstm.pt
 results/*.log
 results/log_*.txt
 
@@ -13,5 +12,5 @@ venv/
 __pycache__/
 *.pyc
 
-# 註:results/ 內的圖表(*.png)、指標(*.json)、比較表(*.csv)刻意「保留」進版控,
-# 因為它們就是這份專案的成果展示;僅排除含原始網域的 processed.csv 與模型權重 lstm.pt。
+# 註:results/ 內的圖表(*.png)、指標(*.json)、比較表(*.csv)與訓練好的 lstm.pt(約 340KB)
+# 刻意「保留」進版控,作為成果展示與 predict.py 的開箱即用模型;僅排除含原始網域的 processed.csv。

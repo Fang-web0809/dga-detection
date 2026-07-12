@@ -1,3 +1,29 @@
+[![CI](https://github.com/Fang-web0809/dga-detection/actions/workflows/ci.yml/badge.svg)](https://github.com/Fang-web0809/dga-detection/actions/workflows/ci.yml)
+
+**English** · [中文（完整報告）↓](#dga-惡意網域偵測lstm-泛化弱點與-llm-二審分層架構)
+
+# DGA Domain Detection — LSTM generalization study & LLM two-tier triage
+
+A character-level **LSTM** flags algorithmically-generated (DGA) domains. Headline
+test accuracy is **0.9468** — but a **leave-one-family-out**
+evaluation shows recall on *families the model never saw during training* collapses:
+dictionary-style families average **0.5467** and drop as low as **0.0741**
+(matsnu), against **0.9555** on the normal test set.
+
+An **LLM few-shot** baseline (Claude, fable) recovers most of that blind spot
+— unseen dictionary-family recall **0.92** — which motivates a layered
+**"LSTM fast filter + LLM second-opinion on suspicious samples"** design.
+
+**Try it (uses the committed model):**
+```bash
+python src/predict.py google.com wikipedia.org kq3vz8xw1.com xjkw92mfp.net
+```
+
+The full report below is in Traditional Chinese. Figures, metrics and the three-way
+comparison table live in [`results/`](results/); data sources are in [`DATA.md`](DATA.md).
+
+---
+
 # DGA 惡意網域偵測:LSTM 泛化弱點與 LLM 二審分層架構
 
 字元級 LSTM 偵測 DGA(演算法生成)網域,用 **leave-one-family-out** 揭露模型對
@@ -22,7 +48,7 @@
 
 | 方法 | 準確率 | 未知家族Recall | 每千筆成本(USD) | 每筆延遲(ms) |
 |---|---|---|---|---|
-| 字元級LSTM | 0.9468 | 0.6875 | ~0 (本地) | 0.244 |
+| 字元級LSTM | 0.9468 | 0.6875 | ~0 (本地) | 0.314 |
 | RandomForest(手工特徵) | 0.814 | —(未做LOO) | ~0 (本地) | 0.01 |
 | LLM few-shot (claude -p, fable) | 0.95 | 0.9636 | 6.0067 | 11205.0 |
 

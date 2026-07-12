@@ -103,8 +103,35 @@ if llm and "per_family_recall" in llm:
     from common import DICT_FAMILIES
     dv = [v for k, v in llm["per_family_recall"].items() if k in DICT_FAMILIES]
     llm_dict_recall = round(float(np.mean(dv)), 4) if dv else None
+loo_matsnu = (loo.get("unseen_recall") or {}).get("matsnu")
 
-readme = f"""# DGA 惡意網域偵測:LSTM 泛化弱點與 LLM 二審分層架構
+readme = f"""[![CI](https://github.com/Fang-web0809/dga-detection/actions/workflows/ci.yml/badge.svg)](https://github.com/Fang-web0809/dga-detection/actions/workflows/ci.yml)
+
+**English** · [中文（完整報告）↓](#dga-惡意網域偵測lstm-泛化弱點與-llm-二審分層架構)
+
+# DGA Domain Detection — LSTM generalization study & LLM two-tier triage
+
+A character-level **LSTM** flags algorithmically-generated (DGA) domains. Headline
+test accuracy is **{g(main,'lstm','accuracy')}** — but a **leave-one-family-out**
+evaluation shows recall on *families the model never saw during training* collapses:
+dictionary-style families average **{dict_avg}** and drop as low as **{loo_matsnu}**
+(matsnu), against **{g(main,'lstm','recall_pos')}** on the normal test set.
+
+An **LLM few-shot** baseline (Claude, {LLM_LABEL}) recovers most of that blind spot
+— unseen dictionary-family recall **{llm_dict_recall}** — which motivates a layered
+**"LSTM fast filter + LLM second-opinion on suspicious samples"** design.
+
+**Try it (uses the committed model):**
+```bash
+python src/predict.py google.com wikipedia.org kq3vz8xw1.com xjkw92mfp.net
+```
+
+The full report below is in Traditional Chinese. Figures, metrics and the three-way
+comparison table live in [`results/`](results/); data sources are in [`DATA.md`](DATA.md).
+
+---
+
+# DGA 惡意網域偵測:LSTM 泛化弱點與 LLM 二審分層架構
 
 字元級 LSTM 偵測 DGA(演算法生成)網域,用 **leave-one-family-out** 揭露模型對
 「訓練時沒見過的 DGA 家族」的泛化弱點,並與 Random Forest、LLM few-shot 三方比較。
