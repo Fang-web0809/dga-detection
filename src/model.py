@@ -1,4 +1,4 @@
-"""model.py — 字元級 LSTM(交接文件第 7 節超參數)。"""
+"""Character-level LSTM classifier."""
 import torch
 import torch.nn as nn
 

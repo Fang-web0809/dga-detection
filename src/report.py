@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-report.py — 步驟 8。彙整三方(LSTM / RandomForest / LLM)結果:
-產出三方比較表(csv+markdown)並生成 README.md(把定性描述換成實際數字)。
-需先跑完 train.py / leave_one_out.py / llm_baseline.py。
+Aggregate the LSTM / RandomForest / LLM results into a three-way comparison table
+(CSV + Markdown) and regenerate README.md with the actual numbers filled in.
+Run train.py, leave_one_out.py and llm_baseline.py first.
 """
 import argparse, json, os, sys, time
 import numpy as np
@@ -13,8 +13,8 @@ from model import CharLSTM
 
 _ap = argparse.ArgumentParser()
 _ap.add_argument("--llm-metrics", default="llm_metrics.json",
-                 help="要當作代表性 LLM 的 metrics(相對 results/);預設 haiku")
-_ap.add_argument("--llm-label", default="haiku", help="比較表/README 顯示的 LLM 模型名")
+                 help="metrics file to use as the representative LLM (relative to results/)")
+_ap.add_argument("--llm-label", default="haiku", help="LLM model name shown in the table/README")
 _args = _ap.parse_args()
 
 R = "results"
@@ -28,7 +28,7 @@ loo = load("loo_results.json", {})
 llm = load(_args.llm_metrics, {})
 LLM_LABEL = _args.llm_label
 
-# ---- 量 LSTM / RF 每筆推論延遲(取測試集一批)----
+# Per-domain inference latency for LSTM / RF, measured on a slice of the test set.
 df = load_processed(os.path.join(R, "processed.csv")) if os.path.exists(os.path.join(R, "processed.csv")) else None
 lstm_lat_ms = rf_lat_ms = None
 if df is not None and os.path.exists(os.path.join(R, "lstm.pt")):
@@ -40,16 +40,13 @@ if df is not None and os.path.exists(os.path.join(R, "lstm.pt")):
         for i in range(0, len(X), 512):
             torch.sigmoid(m(torch.from_numpy(X[i:i+512])))
         lstm_lat_ms = round((time.perf_counter() - t0) / len(X) * 1000, 3)
-    # RF
-    from sklearn.ensemble import RandomForestClassifier
-    F = rf_features(te["sld"].tolist())
-    # 重新 fit 一顆小的僅為量延遲不必要;改用 main 內時間無 per-item,故量 predict
-    # 簡化:用已存在的特徵推論時間近似(不含 fit)
+    # For RF, feature extraction dominates inference cost, so approximate the
+    # per-domain latency by the time to compute features (the tree lookup is negligible).
     t0 = time.perf_counter()
-    _ = rf_features(te["sld"].tolist())  # 特徵計算才是 RF 推論主成本
+    _ = rf_features(te["sld"].tolist())
     rf_lat_ms = round((time.perf_counter() - t0) / len(te) * 1000, 3)
 
-# ---- 三方比較表 ----
+# Three-way comparison table.
 def g(d, *keys, default=None):
     for k in keys:
         if not isinstance(d, dict): return default
@@ -75,17 +72,17 @@ rows = [
      rf_lat_ms],
     [f"LLM few-shot (claude -p, {LLM_LABEL})",
      llm.get("accuracy"),
-     round(llm.get("recall", 0), 4) if llm else None,   # LLM 全為未見過樣本
+     round(llm.get("recall", 0), 4) if llm else None,   # every LLM sample is effectively unseen
      llm.get("cost_per_1000_usd"),
      round(llm.get("avg_latency_s_per_domain", 0) * 1000, 1) if llm and llm.get("avg_latency_s_per_domain") else None],
 ]
 
-# 寫 csv
+# write CSV
 import csv
 with open(os.path.join(R, "comparison_three_way.csv"), "w", newline="", encoding="utf-8") as f:
     csv.writer(f).writerows(rows)
 
-# markdown 表
+# Markdown table
 def md_table(rows):
     out = ["| " + " | ".join(map(str, rows[0])) + " |",
            "|" + "---|" * len(rows[0])]
@@ -95,7 +92,7 @@ def md_table(rows):
 
 table_md = md_table(rows)
 
-# ---- README ----
+# Build README from the numbers above.
 lstm_f1 = g(main, "lstm", "f1_pos")
 lstm_prauc = g(main, "lstm", "pr_auc")
 lstm_recall = g(main, "lstm", "recall_pos")
@@ -202,6 +199,6 @@ with open("README.md", "w", encoding="utf-8") as f:
     f.write(readme)
 os.replace("README.md", os.path.join(os.path.dirname(R) or ".", "README.md"))
 
-print("=== 三方比較表 ===")
+print("=== three-way comparison ===")
 print(table_md)
-print("\n寫出 README.md 與 results/comparison_three_way.csv")
+print("\nwrote README.md and results/comparison_three_way.csv")

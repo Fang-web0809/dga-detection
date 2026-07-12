@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """
-train.py — 步驟 3 + 4。
-訓練字元級 LSTM(early stopping)+ Random Forest baseline(自算特徵),
-在測試集評估:classification_report / ROC-AUC+曲線 / 混淆矩陣 / FPR / PR-AUC / 誤報分析。
-產出寫入 results/。
+Train the character-level LSTM and a Random Forest baseline, then evaluate on the
+test set: classification report, ROC-AUC + curve, confusion matrix, FPR, PR-AUC,
+and a sample of misclassified cases. Outputs go to results/.
 
-用法: python src/train.py --data results/processed.csv --epochs 8
+Usage: python src/train.py --data results/processed.csv --epochs 8
 """
 import argparse
 import json
@@ -33,7 +32,10 @@ from model import CharLSTM
 
 def train_lstm(X_tr, y_tr, epochs=8, batch_size=512, lr=1e-3, patience=2,
                val_frac=0.1, seed=42, verbose=True, log=print):
-    """訓練 CharLSTM,回傳 (model, history)。內部切 val 做 early stopping。"""
+    """Train CharLSTM with early stopping on a held-out validation slice.
+
+    Returns (model, history). Reused by the leave-one-family-out experiment.
+    """
     torch.manual_seed(seed)
     n = len(X_tr)
     idx = np.random.RandomState(seed).permutation(n)
@@ -61,7 +63,7 @@ def train_lstm(X_tr, y_tr, epochs=8, batch_size=512, lr=1e-3, patience=2,
             loss = crit(model(xb), yb)
             loss.backward()
             opt.step()
-        # val
+
         model.eval()
         vloss, vn = 0.0, 0
         with torch.no_grad():
@@ -111,8 +113,7 @@ def main():
     Xte = encode_domains(te["sld"].tolist()); yte = te["label"].values
     print(f"train={len(tr)} test={len(te)}  pos_rate(train)={ytr.mean():.3f}")
 
-    # ---- LSTM ----
-    print("訓練 LSTM ...")
+    print("training LSTM ...")
     t0 = time.perf_counter()
     model, hist = train_lstm(Xtr, ytr, epochs=args.epochs, batch_size=args.batch_size)
     lstm_train_sec = time.perf_counter() - t0
@@ -120,14 +121,13 @@ def main():
     p_lstm = lstm_predict_proba(model, Xte)
     yhat_lstm = (p_lstm >= 0.5).astype(int)
 
-    # ---- Random Forest baseline(自算特徵)----
-    print("訓練 RandomForest baseline ...")
+    # Random Forest baseline on the hand-crafted features.
+    print("training RandomForest baseline ...")
     Ftr = rf_features(tr["sld"].tolist()); Fte = rf_features(te["sld"].tolist())
     rf = RandomForestClassifier(n_estimators=200, n_jobs=-1, random_state=42)
     t0 = time.perf_counter(); rf.fit(Ftr, ytr); rf_train_sec = time.perf_counter() - t0
     p_rf = rf.predict_proba(Fte)[:, 1]; yhat_rf = (p_rf >= 0.5).astype(int)
 
-    # ---- 指標 ----
     def block(name, y, yhat, p):
         rep = classification_report(y, yhat, output_dict=True, zero_division=0)
         tn, fp, fn, tp = confusion_matrix(y, yhat, labels=[0, 1]).ravel()
@@ -156,7 +156,7 @@ def main():
     with open(os.path.join(args.outdir, "metrics_main.json"), "w", encoding="utf-8") as f:
         json.dump(metrics, f, ensure_ascii=False, indent=2)
 
-    # ---- ROC 圖 ----
+    # ROC
     plt.figure(figsize=(6, 5))
     for name, p in [("LSTM", p_lstm), ("RandomForest", p_rf)]:
         fpr_c, tpr_c, _ = roc_curve(yte, p)
@@ -166,7 +166,7 @@ def main():
     plt.title("ROC — DGA detection"); plt.legend(); plt.tight_layout()
     plt.savefig(os.path.join(args.outdir, "roc_curve.png"), dpi=120); plt.close()
 
-    # ---- PR 圖 ----
+    # Precision-Recall
     plt.figure(figsize=(6, 5))
     for name, p in [("LSTM", p_lstm), ("RandomForest", p_rf)]:
         prec, rec, _ = precision_recall_curve(yte, p)
@@ -175,7 +175,7 @@ def main():
     plt.title("Precision-Recall — DGA detection"); plt.legend(); plt.tight_layout()
     plt.savefig(os.path.join(args.outdir, "pr_curve.png"), dpi=120); plt.close()
 
-    # ---- 混淆矩陣圖(LSTM)----
+    # Confusion matrix (LSTM)
     cm = confusion_matrix(yte, yhat_lstm, labels=[0, 1])
     plt.figure(figsize=(4.5, 4))
     plt.imshow(cm, cmap="Blues")
@@ -186,17 +186,17 @@ def main():
     plt.xlabel("predicted"); plt.ylabel("true"); plt.title("LSTM confusion matrix")
     plt.tight_layout(); plt.savefig(os.path.join(args.outdir, "confusion_lstm.png"), dpi=120); plt.close()
 
-    # ---- 誤報/誤判案例分析(LSTM,20-50 筆)----
+    # Save a sample of misclassified cases for manual inspection.
     te2 = te.copy(); te2["pred"] = yhat_lstm; te2["proba"] = np.round(p_lstm, 3)
-    fp_cases = te2[(te2.label == 0) & (te2.pred == 1)].head(30)  # 正常被判 DGA
-    fn_cases = te2[(te2.label == 1) & (te2.pred == 0)].head(30)  # DGA 漏抓
+    fp_cases = te2[(te2.label == 0) & (te2.pred == 1)].head(30)  # benign flagged as DGA
+    fn_cases = te2[(te2.label == 1) & (te2.pred == 0)].head(30)  # DGA missed
     fp_cases.to_csv(os.path.join(args.outdir, "misclass_false_positive.csv"), index=False)
     fn_cases.to_csv(os.path.join(args.outdir, "misclass_false_negative.csv"), index=False)
 
-    print("\n=== 主結果 ===")
+    print("\n=== main results ===")
     print(json.dumps({"lstm": metrics["lstm"], "rf": metrics["rf"]},
                      ensure_ascii=False, indent=2))
-    print("寫出: metrics_main.json, roc_curve.png, pr_curve.png, confusion_lstm.png, "
+    print("wrote: metrics_main.json, roc_curve.png, pr_curve.png, confusion_lstm.png, "
           "misclass_*.csv, lstm.pt")
 
 

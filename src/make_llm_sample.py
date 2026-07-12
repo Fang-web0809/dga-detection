@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""從測試集抽樣給 LLM 對照組(步驟 6):每個 DGA 家族抽 n_per_family + 一批 benign。"""
+"""Sample the test set for the LLM baseline: n_per_family DGA per family plus a batch of benign."""
 import argparse, os, sys
 import pandas as pd
 sys.path.insert(0, os.path.dirname(__file__))
@@ -21,6 +21,6 @@ for fam in ALL_FAMILIES:
         parts.append(sub.sample(min(len(sub), args.per_family), random_state=42))
 ben = te[te.label == 0].sample(min((te.label == 0).sum(), args.benign), random_state=42)
 parts.append(ben)
-out = pd.concat(parts, ignore_index=True).sample(frac=1, random_state=42)  # 打散
+out = pd.concat(parts, ignore_index=True).sample(frac=1, random_state=42)  # shuffle
 out[["sld", "label", "family"]].to_csv(args.out, index=False)
-print(f"寫出 {args.out}  共 {len(out)} 筆(DGA {int((out.label==1).sum())} / benign {int((out.label==0).sum())})")
+print(f"wrote {args.out}  {len(out)} rows (DGA {int((out.label==1).sum())} / benign {int((out.label==0).sum())})")

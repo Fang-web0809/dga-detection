@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """
-leave_one_out.py — 步驟 5(核心泛化實驗)。
-逐一把某個 DGA 家族從訓練資料中完全移除,只在該家族上測 recall,
-揭露「模型對沒見過的家族」掉多少。輸出家族 vs Recall 長條圖 + 一般測試集 recall 參考線。
+Leave-one-family-out generalization experiment.
 
-用法: python src/leave_one_out.py --data results/processed.csv --epochs 4 \
+For each DGA family, remove it entirely from training and measure recall on that
+family alone. This exposes how far the model drops on families it never saw.
+Outputs a per-family recall bar chart with the normal test-set recall as a
+reference line.
+
+Usage: python src/leave_one_out.py --data results/processed.csv --epochs 4 \
         --benign-cap 40000 --other-cap 6000
 """
 import argparse
@@ -28,11 +31,11 @@ def main():
     ap.add_argument("--outdir", default="results")
     ap.add_argument("--epochs", type=int, default=4)
     ap.add_argument("--benign-cap", type=int, default=0,
-                    help="每折訓練用的 benign 上限(0=全用);CPU 上可設小加速")
+                    help="benign cap per fold (0 = use all); lower it to speed up on CPU")
     ap.add_argument("--other-cap", type=int, default=0,
-                    help="每折其他 DGA 家族各自的取樣上限(0=全用)")
+                    help="per-family cap for the other DGA families (0 = use all)")
     ap.add_argument("--ref-recall", type=float, default=None,
-                    help="一般測試集 recall 參考線;省略則讀 metrics_main.json")
+                    help="normal test-set recall reference line; read from metrics_main.json if omitted")
     args = ap.parse_args()
     os.makedirs(args.outdir, exist_ok=True)
 
@@ -40,7 +43,7 @@ def main():
     df = df.reset_index(drop=True)
     rng = np.random.RandomState(42)
 
-    # 參考線:一般測試集(混合家族)的 recall
+    # Reference line: recall on the normal (mixed-family) test set.
     ref = args.ref_recall
     if ref is None:
         mp = os.path.join(args.outdir, "metrics_main.json")
@@ -72,15 +75,15 @@ def main():
         model, _ = train_lstm(Xtr, ytr, epochs=args.epochs, verbose=True,
                               log=lambda m: print("   " + m))
         p = lstm_predict_proba(model, Xte)
-        recall = float((p >= 0.5).mean())  # 全部真陽,recall=判為DGA比例
+        recall = float((p >= 0.5).mean())  # all held-out samples are positive
         results[fam] = round(recall, 4)
         print(f"   -> unseen recall({fam}) = {recall:.4f}")
-        # checkpoint 每折
+        # Checkpoint after every fold.
         with open(os.path.join(args.outdir, "loo_results.json"), "w", encoding="utf-8") as f:
             json.dump({"ref_test_recall": ref, "unseen_recall": results,
                        "dict_families": DICT_FAMILIES}, f, ensure_ascii=False, indent=2)
 
-    # ---- 長條圖 ----
+    # Bar chart
     fams = list(results.keys())
     vals = [results[f] for f in fams]
     colors = ["#d62728" if f in DICT_FAMILIES else "#1f77b4" for f in fams]
@@ -88,12 +91,12 @@ def main():
     bars = plt.bar(fams, vals, color=colors)
     if ref is not None:
         plt.axhline(ref, color="green", linestyle="--",
-                    label=f"一般測試集 recall = {ref:.2f}")
+                    label=f"normal test-set recall = {ref:.2f}")
     for b, v in zip(bars, vals):
         plt.text(b.get_x() + b.get_width() / 2, v + 0.01, f"{v:.2f}",
                  ha="center", fontsize=8)
     plt.ylabel("Recall on UNSEEN family"); plt.ylim(0, 1.05)
-    plt.title("Leave-one-family-out:未見過家族的偵測率\n(紅=字典/組合型 藍=亂數型)")
+    plt.title("Leave-one-family-out: recall on unseen families\n(red = dictionary/word-based, blue = arithmetic)")
     plt.legend(); plt.xticks(rotation=30, ha="right"); plt.tight_layout()
     plt.savefig(os.path.join(args.outdir, "loo_recall.png"), dpi=120); plt.close()
 
@@ -105,7 +108,7 @@ def main():
                "random_family_avg_recall": round(float(rand_avg), 4)}
     with open(os.path.join(args.outdir, "loo_results.json"), "w", encoding="utf-8") as f:
         json.dump(summary, f, ensure_ascii=False, indent=2)
-    print("\n=== LOO 摘要 ===")
+    print("\n=== LOO summary ===")
     print(json.dumps(summary, ensure_ascii=False, indent=2))
 
 

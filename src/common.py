@@ -1,22 +1,22 @@
-"""共用工具:字元集/編碼、RF 手工特徵、資料載入。所有 script 共用,確保一致性。"""
+"""Shared helpers: character vocabulary/encoding, hand-crafted RF features, data loading."""
 import math
 import numpy as np
 import pandas as pd
 
-# --- 字元集(交接文件第 5 節,index 0 保留給 padding)---
+# Character vocabulary. Index 0 is reserved for padding.
 CHARSET = "abcdefghijklmnopqrstuvwxyz0123456789-_"
 CHAR2IDX = {c: i + 1 for i, c in enumerate(CHARSET)}  # 1..38
-VOCAB_SIZE = len(CHARSET) + 1                          # +1 for padding(0)
+VOCAB_SIZE = len(CHARSET) + 1                          # +1 for the padding slot
 MAXLEN = 40
 
-# leave-one-family-out 用的家族分型(交接文件第 5 節)
-DICT_FAMILIES = ["matsnu", "suppobox_1", "pizd", "gozi_gpl", "rovnix"]      # 字典/組合型(難)
-RANDOM_FAMILIES = ["cryptolocker", "ramnit", "necurs", "tinba", "banjori", "qadars"]  # 亂數型(對照)
+# Family groups for the leave-one-family-out experiment.
+DICT_FAMILIES = ["matsnu", "suppobox_1", "pizd", "gozi_gpl", "rovnix"]      # dictionary / word-based (hard)
+RANDOM_FAMILIES = ["cryptolocker", "ramnit", "necurs", "tinba", "banjori", "qadars"]  # arithmetic / random (control)
 ALL_FAMILIES = DICT_FAMILIES + RANDOM_FAMILIES
 
 
 def encode_domains(domains, maxlen=MAXLEN):
-    """把字串序列編碼成 (N, maxlen) int 矩陣;字元集外字元記為 0(同 padding)。"""
+    """Encode strings into an (N, maxlen) int matrix; out-of-vocab chars map to 0 (padding)."""
     n = len(domains)
     X = np.zeros((n, maxlen), dtype=np.int64)
     for i, d in enumerate(domains):
@@ -26,7 +26,8 @@ def encode_domains(domains, maxlen=MAXLEN):
     return X
 
 
-# --- Random Forest 手工特徵(交接文件第 7 節:自算,不用內建特徵檔)---
+# Hand-crafted features for the Random Forest baseline (computed here, not taken
+# from any bundled feature file).
 _VOWELS = set("aeiou")
 
 def _entropy(s):
@@ -38,7 +39,7 @@ def _entropy(s):
     return -sum((c / n) * math.log2(c / n) for c in counts.values())
 
 def rf_features(domains):
-    """回傳 (N,4) 特徵:length / entropy / digit_ratio / vowel_ratio。"""
+    """Return an (N, 4) matrix: length, entropy, digit_ratio, vowel_ratio."""
     feats = np.zeros((len(domains), 4), dtype=np.float64)
     for i, d in enumerate(domains):
         d = str(d)
@@ -57,7 +58,7 @@ RF_FEATURE_NAMES = ["length", "entropy", "digit_ratio", "vowel_ratio"]
 
 
 def load_processed(path):
-    """讀 preprocess 產出的 processed.csv(欄位 sld,label,family,split)。"""
+    """Load the processed.csv written by preprocess (columns: sld, label, family, split)."""
     df = pd.read_csv(path, keep_default_na=False, na_values=[])
     df["label"] = df["label"].astype(int)
     return df
