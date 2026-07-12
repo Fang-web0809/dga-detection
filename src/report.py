@@ -105,42 +105,43 @@ if llm and "per_family_recall" in llm:
     llm_dict_recall = round(float(np.mean(dv)), 4) if dv else None
 loo_matsnu = (loo.get("unseen_recall") or {}).get("matsnu")
 
-readme = f"""[![CI](https://github.com/Fang-web0809/dga-detection/actions/workflows/ci.yml/badge.svg)](https://github.com/Fang-web0809/dga-detection/actions/workflows/ci.yml)
+readme = f"""# DGA Domain Detection — LSTM generalization study & LLM two-tier triage
 
-**English** · [中文（完整報告）↓](#dga-惡意網域偵測lstm-泛化弱點與-llm-二審分層架構)
+[![CI](https://github.com/Fang-web0809/dga-detection/actions/workflows/ci.yml/badge.svg)](https://github.com/Fang-web0809/dga-detection/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
 
-# DGA Domain Detection — LSTM generalization study & LLM two-tier triage
+> Character-level LSTM for detecting algorithmically-generated (DGA) domains — with a
+> leave-one-family-out study that exposes generalization gaps, and a layered LLM triage design.
 
-A character-level **LSTM** flags algorithmically-generated (DGA) domains. Headline
-test accuracy is **{g(main,'lstm','accuracy')}** — but a **leave-one-family-out**
-evaluation shows recall on *families the model never saw during training* collapses:
-dictionary-style families average **{dict_avg}** and drop as low as **{loo_matsnu}**
-(matsnu), against **{g(main,'lstm','recall_pos')}** on the normal test set.
+<p align="center">
+  <img src="results/loo_recall.png" width="88%" alt="Leave-one-family-out recall on unseen families">
+</p>
 
-An **LLM few-shot** baseline (Claude, {LLM_LABEL}) recovers most of that blind spot
-— unseen dictionary-family recall **{llm_dict_recall}** — which motivates a layered
+**TL;DR.** A character-level LSTM flags DGA domains at **{g(main,'lstm','accuracy')}** test
+accuracy — but a **leave-one-family-out** evaluation shows recall on *families never seen during
+training* collapses: dictionary-style families average **{dict_avg}** and drop as low as
+**{loo_matsnu}** (matsnu), versus **{g(main,'lstm','recall_pos')}** on the normal test set. An
+**LLM few-shot** baseline (Claude, {LLM_LABEL}) recovers most of that blind spot (unseen
+dictionary-family recall **{llm_dict_recall}**), motivating a layered
 **"LSTM fast filter + LLM second-opinion on suspicious samples"** design.
 
-**Try it (uses the committed model):**
+**Try it** (uses the committed model):
 ```bash
 python src/predict.py google.com wikipedia.org kq3vz8xw1.com xjkw92mfp.net
 ```
 
-The full report below is in Traditional Chinese. Figures, metrics and the three-way
-comparison table live in [`results/`](results/); data sources are in [`DATA.md`](DATA.md).
+Figures, metrics and the three-way comparison table live in [`results/`](results/);
+data sources are in [`DATA.md`](DATA.md). The full report below is in Traditional Chinese.
 
 ---
 
-# DGA 惡意網域偵測:LSTM 泛化弱點與 LLM 二審分層架構
+> 以下為完整中文報告 · Full report in Traditional Chinese.
 
 字元級 LSTM 偵測 DGA(演算法生成)網域,用 **leave-one-family-out** 揭露模型對
 「訓練時沒見過的 DGA 家族」的泛化弱點,並與 Random Forest、LLM few-shot 三方比較。
-
-![Leave-one-family-out:未見過家族的偵測率](results/loo_recall.png)
-
-> 上圖是本專案的核心結果:把每個 DGA 家族輪流當成「訓練時沒見過」的家族來測 LSTM 的
-> Recall(紅=字典/組合型、藍=亂數型,綠色虛線為一般測試集 Recall)。亂數型即使沒見過仍有
-> ~90–100%,但字典型(尤其 matsnu、suppobox_1)大幅崩落——這就是報告要凸顯的泛化盲區。
+上方長條圖為核心結果:每個家族輪流當「訓練時沒見過」的測試家族,亂數型即使沒見過仍有
+~90–100%,但字典型(尤其 matsnu、suppobox_1)大幅崩落——這正是本專案要凸顯的泛化盲區。
 
 ## 核心發現
 - LSTM 在**已知家族**表現優異:測試集 F1 = **{lstm_f1}**、Recall = **{lstm_recall}**、PR-AUC = **{lstm_prauc}**。
@@ -171,14 +172,6 @@ comparison table live in [`results/`](results/); data sources are in [`DATA.md`]
 **LSTM 即時過濾 + LLM 對可疑樣本二審**:LSTM 快又準但對未見家族有洞;LLM 慢又貴,
 但對字典型 DGA 靠語言常識補上 LSTM 的盲區。以 LSTM 做第一線高吞吐過濾,
 對低信心/可疑樣本再交 LLM 二審,兼顧吞吐與泛化。
-
-## 產出檔案(results/)
-- `metrics_main.json` — LSTM 與 RF 在測試集的完整指標
-- `roc_curve.png` / `pr_curve.png` / `confusion_lstm.png` — 曲線與混淆矩陣
-- `misclass_false_positive.csv` / `misclass_false_negative.csv` — 誤判案例(人工分析用)
-- `loo_results.json` / `loo_recall.png` — leave-one-family-out 泛化實驗
-- `llm_metrics.json` / `llm_predictions.csv` — LLM 對照組
-- `comparison_three_way.csv` — 三方比較表
 
 ## 資料來源、授權與倫理
 - **資料不隨 repo 散布**:DGA 樣本來自 **UMUDGA**(Mendeley DOI `10.17632/y8ph45msv8.1`)、
@@ -221,6 +214,19 @@ benign ≈ 120k、每家族上限 8k(去重後約 200k,正負比 ≈ 1.28 : 1),l
 每折再降規模(benign 上限 40k、其他家族各 5k、4 epochs),並同時以 PR-AUC 評估。在 GPU
 或更大機器上,可用 `--benign-n 300000 --family-cap 10000` 與更多 epochs 還原完整規模;
 泛化缺口屬結構性,結論方向不受規模影響。
+
+## 產出檔案(results/)
+- `metrics_main.json` — LSTM 與 RF 在測試集的完整指標
+- `roc_curve.png` / `pr_curve.png` / `confusion_lstm.png` — 曲線與混淆矩陣
+- `misclass_false_positive.csv` / `misclass_false_negative.csv` — 誤判案例(人工分析用)
+- `loo_results.json` / `loo_recall.png` — leave-one-family-out 泛化實驗
+- `llm_metrics.json` / `llm_predictions.csv` — LLM 對照組
+- `comparison_three_way.csv` — 三方比較表
+
+## License · Acknowledgements · Citation
+- **License** — code released under the MIT License (see [LICENSE](LICENSE)); the datasets keep their own licenses and are not redistributed here.
+- **Acknowledgements** — UMUDGA DGA dataset (Mendeley DOI `10.17632/y8ph45msv8.1`) and the Tranco top-1M list (https://tranco-list.eu/).
+- **Citation** — if you build on this work, please cite the UMUDGA dataset and Tranco; details in [DATA.md](DATA.md).
 """
 with open("README.md", "w", encoding="utf-8") as f:
     f.write(readme)
