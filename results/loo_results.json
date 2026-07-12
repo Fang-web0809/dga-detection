@@ -1,0 +1,18 @@
+{
+  "ref_test_recall": 0.9555,
+  "unseen_recall": {
+    "matsnu": 0.0741,
+    "suppobox_1": 0.2584,
+    "pizd": 0.5381,
+    "gozi_gpl": 0.9031,
+    "rovnix": 0.9597,
+    "cryptolocker": 0.9802,
+    "ramnit": 0.9005,
+    "necurs": 0.8874,
+    "tinba": 0.9901,
+    "banjori": 0.9994,
+    "qadars": 0.071
+  },
+  "dict_family_avg_recall": 0.5467,
+  "random_family_avg_recall": 0.8048
+}

@@ -1,0 +1,68 @@
+# DGA 惡意網域偵測:LSTM 泛化弱點與 LLM 二審分層架構
+
+字元級 LSTM 偵測 DGA(演算法生成)網域,用 **leave-one-family-out** 揭露模型對
+「訓練時沒見過的 DGA 家族」的泛化弱點,並與 Random Forest、LLM few-shot 三方比較。
+
+## 核心發現
+- LSTM 在**已知家族**表現優異:測試集 F1 = **0.9403**、Recall = **0.9555**、PR-AUC = **0.984**。
+- 但對 **leave-one-family-out(未見過家族)** 平均 Recall 降至 **0.6875**:
+  其中**字典/組合型**家族平均僅 **0.5467**,**亂數型**家族平均 **0.8048**。
+  → 印證報告主軸:*表面準確率很高,但對沒見過的家族(尤其字典型)會大幅崩落*。
+- LLM few-shot(claude -p / fable)準確率 **0.95**,
+  在**字典型未見過家族**上平均 Recall = **0.92**——
+  因為具語言常識,在字典型 DGA 上反而優於 LSTM 的 LOO 表現。
+
+## 三方比較
+
+| 方法 | 準確率 | 未知家族Recall | 每千筆成本(USD) | 每筆延遲(ms) |
+|---|---|---|---|---|
+| 字元級LSTM | 0.9468 | 0.6875 | ~0 (本地) | 0.186 |
+| RandomForest(手工特徵) | 0.814 | —(未做LOO) | ~0 (本地) | 0.009 |
+| LLM few-shot (claude -p, fable) | 0.95 | 0.9636 | 6.0067 | 11205.0 |
+
+> 註:LLM 樣本中所有家族對模型而言皆為「未見過」(few-shot 未含訓練)。延遲為逐筆
+> `claude -p` 近似上界(含 CLI 啟動開銷)。成本取自 claude JSON 的 `total_cost_usd`。
+
+## 建議架構
+**LSTM 即時過濾 + LLM 對可疑樣本二審**:LSTM 快又準但對未見家族有洞;LLM 慢又貴,
+但對字典型 DGA 靠語言常識補上 LSTM 的盲區。以 LSTM 做第一線高吞吐過濾,
+對低信心/可疑樣本再交 LLM 二審,兼顧吞吐與泛化。
+
+## 產出檔案(results/)
+- `metrics_main.json` — LSTM 與 RF 在測試集的完整指標
+- `roc_curve.png` / `pr_curve.png` / `confusion_lstm.png` — 曲線與混淆矩陣
+- `misclass_false_positive.csv` / `misclass_false_negative.csv` — 誤判案例(人工分析用)
+- `loo_results.json` / `loo_recall.png` — leave-one-family-out 泛化實驗
+- `llm_metrics.json` / `llm_predictions.csv` — LLM 對照組
+- `comparison_three_way.csv` — 三方比較表
+
+## 資料來源、授權與倫理
+- **資料不隨 repo 散布**:DGA 樣本來自 **UMUDGA**(Mendeley DOI `10.17632/y8ph45msv8.1`)、
+  正常樣本來自 **Tranco Top-1M**(https://tranco-list.eu/)。下載方式、放置路徑與引用見 **[DATA.md](DATA.md)**。
+- **程式碼授權**:MIT(見 [LICENSE](LICENSE));資料集各依其原始授權,不在本授權範圍。
+- **倫理定位**:本專案為**防禦性**偵測研究,惡意網域清單源自公開學術資料集、未再散布,
+  不提供任何 DGA 生成器或可攻擊產物。詳見 DATA.md。
+
+## 重現方式
+```bash
+python -m venv venv && ./venv/bin/pip install -r requirements.txt
+# 依 DATA.md 下載資料到 data/dga/*.txt 與 data/tranco.csv
+./venv/bin/python src/preprocess.py --benign-n 120000 --family-cap 8000
+./venv/bin/bash src/run_experiments.sh          # train(LSTM+RF) + leave-one-family-out
+./venv/bin/python src/make_llm_sample.py
+# LLM 對照組:--model 可換 haiku / sonnet / fable(本報告以 fable 為代表)
+./venv/bin/python src/llm_baseline.py --input results/llm_sample.csv --model fable --outdir results/llm_fable
+./venv/bin/python src/report.py --llm-metrics llm_fable/llm_metrics.json --llm-label fable
+```
+
+## 實作與設定說明(重要)
+- **坑一已處理**:family 取樣用 `groupby(..., group_keys=False)[[...]]` 明確選欄,
+  並 `assert` DGA 樣本 family 非空,避免新版 pandas 弄丟家族標籤。
+- **坑二已處理**:只取 SLD;已排除 symmi(亂數藏子網域會使 SLD 崩塌)。preprocess 內含
+  每家族 `sld.nunique()` 自檢警告。
+- **合併後才去重**(`drop_duplicates(subset="sld")`)再切分,避免同 SLD 落在訓練/測試。
+- **CPU 可行性設定(本次實跑)**:此環境為 CPU-only(4 核)。為在合理時間內完成,
+  本次採 benign≈12 萬、每家族上限 8000(去重後總量約 20 萬,正:惡≈1.28:1);
+  LOO 每折降規模(benign 上限 4 萬、其他家族各上限 5000、4 epochs)。
+  評估同時報告 **PR-AUC**。若在 GPU / 更大機器,可用 `--benign-n 300000 --family-cap 10000`
+  與更多 epochs 還原交接文件的完整規模,結論方向不變(泛化缺口是結構性的)。

@@ -1,0 +1,12 @@
+# 核心套件
+pandas
+numpy
+scikit-learn
+matplotlib
+seaborn
+tldextract
+torch            # 若 VM 有 GPU,改用 https://pytorch.org 指定的 CUDA 版指令安裝
+
+# 選配
+streamlit        # 步驟 7:Streamlit demo
+jupyter          # notebook 實驗

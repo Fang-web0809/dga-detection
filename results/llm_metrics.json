@@ -1,0 +1,29 @@
+{
+  "model": "haiku",
+  "n_samples": 200,
+  "accuracy": 0.65,
+  "precision": 0.9439,
+  "recall": 0.6121,
+  "f1": 0.7426,
+  "fpr": 0.1714,
+  "unresolved_count": 0,
+  "per_family_recall": {
+    "banjori": 1.0,
+    "cryptolocker": 1.0,
+    "gozi_gpl": 0.4667,
+    "matsnu": 0.0,
+    "necurs": 1.0,
+    "pizd": 0.0,
+    "qadars": 1.0,
+    "ramnit": 1.0,
+    "rovnix": 0.2667,
+    "suppobox_1": 0.0,
+    "tinba": 1.0
+  },
+  "total_cost_usd": 0.10898,
+  "cost_per_1000_usd": 0.5449,
+  "input_tokens": 40,
+  "output_tokens": 10649,
+  "avg_latency_s_per_domain": 10.904,
+  "latency_note": "逐筆 claude -p 含 CLI 啟動開銷,為近似上界"
+}
