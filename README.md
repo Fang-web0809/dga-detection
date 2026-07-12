@@ -22,8 +22,8 @@
 
 | 方法 | 準確率 | 未知家族Recall | 每千筆成本(USD) | 每筆延遲(ms) |
 |---|---|---|---|---|
-| 字元級LSTM | 0.9468 | 0.6875 | ~0 (本地) | 0.172 |
-| RandomForest(手工特徵) | 0.814 | —(未做LOO) | ~0 (本地) | 0.009 |
+| 字元級LSTM | 0.9468 | 0.6875 | ~0 (本地) | 0.186 |
+| RandomForest(手工特徵) | 0.814 | —(未做LOO) | ~0 (本地) | 0.004 |
 | LLM few-shot (claude -p, fable) | 0.95 | 0.9636 | 6.0067 | 11205.0 |
 
 > 註:LLM 樣本中所有家族對模型而言皆為「未見過」(few-shot 未含訓練)。延遲為逐筆
@@ -70,14 +70,25 @@ python -m venv venv && ./venv/bin/pip install -r requirements.txt
 ./venv/bin/python src/report.py --llm-metrics llm_fable/llm_metrics.json --llm-label fable
 ```
 
-## 實作與設定說明(重要)
-- **坑一已處理**:family 取樣用 `groupby(..., group_keys=False)[[...]]` 明確選欄,
-  並 `assert` DGA 樣本 family 非空,避免新版 pandas 弄丟家族標籤。
-- **坑二已處理**:只取 SLD;已排除 symmi(亂數藏子網域會使 SLD 崩塌)。preprocess 內含
-  每家族 `sld.nunique()` 自檢警告。
-- **合併後才去重**(`drop_duplicates(subset="sld")`)再切分,避免同 SLD 落在訓練/測試。
-- **CPU 可行性設定(本次實跑)**:此環境為 CPU-only(4 核)。為在合理時間內完成,
-  本次採 benign≈12 萬、每家族上限 8000(去重後總量約 20 萬,正:惡≈1.28:1);
-  LOO 每折降規模(benign 上限 4 萬、其他家族各上限 5000、4 epochs)。
-  評估同時報告 **PR-AUC**。若在 GPU / 更大機器,可用 `--benign-n 300000 --family-cap 10000`
-  與更多 epochs 還原交接文件的完整規模,結論方向不變(泛化缺口是結構性的)。
+## 實作備註(資料處理與可重現性)
+
+以下幾點在實作時容易出錯,且會直接影響實驗結論,一併記錄理由與處理方式。
+
+**分層抽樣後必須保留家族標籤。** 在 pandas ≥ 2.x,`groupby("family").apply(...)` 搭配
+`reset_index(drop=True)` 會把 `family` 併入 index 後一起丟掉,使標籤無聲消失、
+leave-one-family-out 無從進行。本專案改用 `groupby("family", group_keys=False)[[...]]`
+明確選取欄位,並在資料組完後以 `assert` 確認惡意樣本的 `family` 皆非空。
+
+**只取主網域(SLD),但有一個例外。** DGA 的隨機性集中在 SLD,保留 TLD 會讓模型走捷徑
+而使泛化評估失真,因此統一以 `tldextract` 取 SLD。少數家族(如 symmi)把隨機字串放在
+子網域,只取 SLD 會塌成單一值,故予以排除;`preprocess.py` 內建 `sld.nunique()` 檢查,
+避免日後新增家族時再度誤用。
+
+**先合併正負樣本、去重,再切分。** 以 `drop_duplicates(subset="sld")` 在合併後去重,
+確保同一個 SLD 不會同時落在訓練集與測試集,避免資料洩漏而高估效能。
+
+**本輪以 CPU 規模執行,可放大重現。** 執行環境為 4 核 CPU;為兼顧時間,本輪採
+benign ≈ 120k、每家族上限 8k(去重後約 200k,正負比 ≈ 1.28 : 1),leave-one-family-out
+每折再降規模(benign 上限 40k、其他家族各 5k、4 epochs),並同時以 PR-AUC 評估。在 GPU
+或更大機器上,可用 `--benign-n 300000 --family-cap 10000` 與更多 epochs 還原完整規模;
+泛化缺口屬結構性,結論方向不受規模影響。
