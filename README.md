@@ -22,12 +22,21 @@
 
 | 方法 | 準確率 | 未知家族Recall | 每千筆成本(USD) | 每筆延遲(ms) |
 |---|---|---|---|---|
-| 字元級LSTM | 0.9468 | 0.6875 | ~0 (本地) | 0.286 |
-| RandomForest(手工特徵) | 0.814 | —(未做LOO) | ~0 (本地) | 0.005 |
+| 字元級LSTM | 0.9468 | 0.6875 | ~0 (本地) | 0.172 |
+| RandomForest(手工特徵) | 0.814 | —(未做LOO) | ~0 (本地) | 0.009 |
 | LLM few-shot (claude -p, fable) | 0.95 | 0.9636 | 6.0067 | 11205.0 |
 
 > 註:LLM 樣本中所有家族對模型而言皆為「未見過」(few-shot 未含訓練)。延遲為逐筆
 > `claude -p` 近似上界(含 CLI 啟動開銷)。成本取自 claude JSON 的 `total_cost_usd`。
+
+### 判別力:ROC 與 PR 曲線(LSTM vs RandomForest)
+<p align="center">
+  <img src="results/roc_curve.png" width="46%" alt="ROC curve — LSTM vs RandomForest">
+  <img src="results/pr_curve.png" width="46%" alt="Precision-Recall curve — LSTM vs RandomForest">
+</p>
+
+字元級 LSTM 的 ROC-AUC 與 PR-AUC 都明顯高於手工特徵的 RandomForest。由於正負樣本略不
+平衡,**PR 曲線(右)比 ROC(左)更能反映實務偵測品質**。另附混淆矩陣 `results/confusion_lstm.png`。
 
 ## 建議架構
 **LSTM 即時過濾 + LLM 對可疑樣本二審**:LSTM 快又準但對未見家族有洞;LLM 慢又貴,
